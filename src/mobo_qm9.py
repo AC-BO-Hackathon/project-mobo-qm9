@@ -1,8 +1,11 @@
 from typing import NamedTuple, Literal, List
 import numpy as np
 from loguru import logger
+import torch
+from botorch.utils.multi_objective.box_decompositions import DominatedPartitioning
 
 from .data.cm_featurizer import get_coulomb_matrix
+from .acquisition_functions import optimize_qEHVI, optimize_qNEHVI
 
 
 N_TOTAL_POINTS = 138_728
@@ -27,7 +30,7 @@ class MOBOQM9Parameters(NamedTuple):
     featurizer: Literal["ECFP", "CM", "ACSF"]
     kernel: Literal["RBF", "Matern", "Tanimoto"]
     surrogate_model: Literal["GaussianProcess", "RandomForest"]
-    acq_func: Literal["qEHVI", "qparEGO"]
+    acq_func: Literal["qEHVI", "qNEHVI", "random"]
     targets: List[str]
     target_bools: List[bool]
     num_candidates: int = 1
@@ -63,8 +66,8 @@ class MOBOQM9:
         """
         # ecfp and soap
         if self.params.featurizer == "CM":
-            features, targets = get_coulomb_matrix(self.total_indices,
-                                                   self.params.targets)
+            return get_coulomb_matrix(self.total_indices,
+                self.params.targets)
         else:
             raise NotImplementedError
     
@@ -96,7 +99,28 @@ class MOBOQM9:
         returns:
             candidates: Candidates for the MOBOQM9 model.
         """
-        pass
+        y_train = self.targets[self.train_indices]
+        for idx, mask in enumerate(self.params.target_bools):
+            if not mask:
+                y_train[:, idx] *= -1
+        y_train = torch.tensor(y_train)
+        x_train = torch.tensor(self.features[self.train_indices])
+        x_test = torch.tensor(self.features[~self.train_indices])
+        reference = y_train.mean(0)[0]
+        if self.params.acq_func == "qEHVI":
+            return optimize_qEHVI(model=model,
+                                  reference=reference,
+                                  y_train=y_train,
+                                  x_test=x_test,
+                                  n_candidates=self.params.num_candidates)
+        elif self.params.acq_func == "qNEHVI":
+            return optimize_qNEHVI(model=model,
+                                   reference=reference,
+                                   x_train=x_train,
+                                   x_test=x_test,
+                                   n_candidates=self.params.num_candidates)
+        else:
+            raise NotImplementedError
     
     def run_optimization(self):
         """
@@ -106,8 +130,13 @@ class MOBOQM9:
             X = self.features[self.train_indices]
             y = self.targets[self.train_indices]
             model = self.get_surrogate_model(X, y)
-            candidates = self.optimize_acquisition_function(model)
-            self.update_train_indices(candidates)
+            if self.params.acq_func == "random":
+                for _ in range(self.params.num_candidates):
+                    idx = np.random.choice(np.where(~self.train_indices)[0])
+                    self.train_indices[idx] = True
+            else:
+                candidates = self.optimize_acquisition_function(model)
+                self.update_train_indices(candidates)
             if self.stopping_criteria_met():
                 break
         logger.info("MOBOQM9 optimization finished.")
@@ -122,7 +151,9 @@ class MOBOQM9:
         # add latin hypercube sampling if time permits
         temp_indices = np.random.randint(0, self.params.num_total_points,
             self.params.num_seed_points)
-        return self.total_indices[temp_indices]
+        mask = np.zeros(len(self.total_indices), dtype=bool)
+        mask[temp_indices] = True
+        return mask
     
     def stopping_criteria_met(self):
         """
@@ -131,8 +162,21 @@ class MOBOQM9:
         returns:
             bool: True if the MOBOQM9 optimization has met the stopping criteria.
         """
-        # if current hv == best hv, then stop.
-        pass
+        y_global = torch.tensor(self.targets)
+        y_current = torch.tensor(self.targets[self.train_indices])
+        ref_points = y_global.min(0)[0]
+        bd_global = DominatedPartitioning(
+            ref_point=ref_points,
+            Y=y_global,
+        )
+        volume_global = bd_global.compute_hypervolume().item()
+        bd_current = DominatedPartitioning(
+            ref_point=ref_points,
+            Y=y_current,
+        )
+        volume_current = bd_current.compute_hypervolume().item()
+        return volume_global == volume_current
+        
     
     def update_train_indices(self, candidates):
         """
@@ -141,7 +185,10 @@ class MOBOQM9:
         args:
             candidates: Candidates for the MOBOQM9 model.
         """
-        pass
+        for cand in candidates:
+            for idx, feat in enumerate(self.features):
+                if np.allclose(feat, cand):
+                    self.train_indices[idx] = True
     
     def validate_params(self):
         """
@@ -153,7 +200,7 @@ class MOBOQM9:
         assert self.params.featurizer in ["ECFP", "CM", "ACSF"], "Featurizer must be one of ECFP, CM, or ACSF."
         assert self.params.kernel in ["RBF", "Matern", "Tanimoto"], "Kernel must be one of RBF, Matern, or Tanimoto."
         assert self.params.surrogate_model in ["GaussianProcess", "RandomForest"], "Surrogate model must be one of GaussianProcess, or RandomForest."
-        assert self.params.acq_func in ["qEHVI", "qparEGO"], "Acquisition function must be one of qEHVI, or qparEGO."
+        assert self.params.acq_func in ["qEHVI", "qNEHVI", "random"], "Acquisition function must be one of qEHVI, or qNEHVI, or random."
         assert len(self.params.targets) == len(self.params.target_bools), "Number of targets must equal number of target booleans."
         assert self.params.num_total_points > 0, "Number of total points must be greater than zero."
         assert self.params.num_seed_points > 0, "Number of seed points must be greater than zero."
