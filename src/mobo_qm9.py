@@ -69,12 +69,17 @@ class MOBOQM9:
         returns:
             target_dict: Target dictionary for the MOBOQM9 model.
         """
-        target_dict = {"iteration": None}
-        for i, target in enumerate(self.params.targets):
-            target_dict[target] = self.targets[:, i]
-            target_dict["target_qEHVI"] = None
-            target_dict["target_qNEHVI"] = None
-            target_dict["target_random"] = None
+        target_dict = {}
+        for itarg, target in enumerate(self.params.targets):
+            target_dict[target] = self.targets[:, itarg]
+            target_dict["iteration_qEHVI"] = [None] * len(self.params.targets)
+            target_dict["iteration_qNEHVI"] = [None] * len(self.params.targets)
+            target_dict["iteration_random"] = [None] * len(self.params.targets)
+            for itrain, train_mask in enumerate(self.train_indices["qEHVI"]):
+                if train_mask:
+                    target_dict["iteration_qeHVI"] = 0
+                    target_dict["iteration_qNEHVI"] = 0
+                    target_dict["iteration_random"] = 0
         return target_dict
     
     def get_features_and_targets(self):
@@ -183,9 +188,10 @@ class MOBOQM9:
                     for _ in range(self.params.num_candidates):
                         idx = np.random.choice(np.where(~self.train_indices)[0])
                         self.train_indices[acq][idx] = True
+                        self.dataframe.at[idx, "iteration_random"] = iter + 1
                 else:
                     candidates = self.optimize_acquisition_function(model)
-                    self.update_train_indices(candidates, acq)
+                    self.update_train_indices(candidates, acq, iter)
                 self.stopping_criteria_met(acq)
                 
         logger.info("MOBOQM9 optimization finished.")
@@ -227,18 +233,20 @@ class MOBOQM9:
         self.acq_met[acq] = (volume_global == volume_current)
         
     
-    def update_train_indices(self, candidates, acq):
+    def update_train_indices(self, candidates, acq, iter):
         """
         Updates the train indices for the MOBOQM9 model.
         
         args:
             candidates: Candidates for the MOBOQM9 model.
             acq: Acquisition function to use.
+            iter: Iteration number for the MOBOQM9 model.
         """
         for cand in candidates:
             for idx, feat in enumerate(self.features):
                 if np.allclose(feat, cand):
                     self.train_indices[acq][idx] = True
+                    self.dataframe.at[idx, "iteration_" + acq] = iter + 1
     
     def validate_params(self):
         """

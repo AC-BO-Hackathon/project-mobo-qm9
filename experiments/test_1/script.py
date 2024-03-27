@@ -1,6 +1,8 @@
 from pathlib import Path
 import sys
 
+import matplotlib.pyplot as plt
+
 sys.path.append(str(Path(__file__).parents[2]))
 
 from src.mobo_qm9 import MOBOQM9, MOBOQM9Parameters
@@ -18,7 +20,8 @@ params = MOBOQM9Parameters(featurizer="CM",
 
 moboqm9 = MOBOQM9(params)
 moboqm9.run_optimization()
-plt = plot_results(moboqm9.dataframe)
+fig = plot_results(moboqm9.dataframe, [True, True])
+fig.tight_layout()
 # plt.savefig("figures/moboqm9_results.png")
 plt.show()
 
