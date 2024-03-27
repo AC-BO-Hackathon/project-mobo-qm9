@@ -4,7 +4,7 @@ from loguru import logger
 from .data.cm_featurizer import get_coulomb_matrix
 
 import torch
-from botorch.models import SingleTaskGP
+from botorch.models import ModelListGP, FixedNoiseGP
 from gpytorch.kernels import RBFKernel, MaternKernel, TanimotoKernel
 from gpytorch.likelihoods import GaussianLikelihood
 from botorch.fit import fit_gpytorch_model
@@ -89,6 +89,10 @@ class MOBOQM9:
         train_Y = torch.tensor(y, dtype=torch.float32)
         likelihood = GaussianLikelihood()
 
+        input_transform = Standardize(m=train_X.shape[-2])
+        train_X_scaled = input_transform(train_X)
+        
+
         if kernel_type == 'RBF':
             kernel = RBFKernel()
         elif kernel_type == 'Matern':
@@ -98,11 +102,13 @@ class MOBOQM9:
         else:
             raise ValueError("Unsupported kernel type. Supported types are 'RBF', 'Matern', and 'Tanimoto'.")
 
-        model = SingleTaskGP(train_X, train_Y, likelihood=likelihood, kernel=kernel)
+        models = [FixedNoiseGP(train_X_scaled, train_Y, noise=torch.zeros_like(train_Y), likelihood=likelihood, kernel=kernel)]
+
+        model = ModelListGP(*models)
         mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
         fit_gpytorch_model(mll)
-    
-        return model
+
+        return model, input_transform
 
     def correct_sign(self,Y)
         y_copy = Y.copy()
