@@ -60,7 +60,8 @@ class MOBOQM9:
             self.params.num_total_points)
         self.features, self.targets = self.get_features_and_targets()
         self.train_indices = self.get_train_indices()
-    
+        self.dataframe = None 
+
     def get_features_and_targets(self):
         """
         Gets the features and targets for the MOBOQM9 model.
@@ -94,7 +95,7 @@ class MOBOQM9:
         elif self.params.kernel == 'Matern':
             kernel = MaternKernel()
         else:
-            raise ValueError("Unsupported kernel type. Supported types are 'RBF', 'Matern', and 'Tanimoto'.")
+            raise ValueError("Unsupported kernel type. Supported types are 'RBF', and 'Matern'.")
 
         models = [SingleTaskGP(features,
                                targets[:, i].unsqueeze(-1),

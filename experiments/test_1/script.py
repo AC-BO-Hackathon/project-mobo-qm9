@@ -20,4 +20,13 @@ params = MOBOQM9Parameters(featurizer="CM",
 moboqm9 = MOBOQM9(params)
 moboqm9.run_optimization()
 plt = plot_results(moboqm9.dataframe)
+# plt.savefig("figures/moboqm9_results.png")
 plt.show()
+
+"""
+panel1 => iteration vs hv [qEHVI qNEHVI random]
+panel2 => pareto front for qEHVI
+panel3 => pareto front for qNEHVI
+panel4 => pareto front for random
+"""
+
