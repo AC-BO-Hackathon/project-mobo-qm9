@@ -1,9 +1,14 @@
 from typing import NamedTuple, Literal, List
 import numpy as np
 from loguru import logger
-
 from .data.cm_featurizer import get_coulomb_matrix
 
+import torch
+from botorch.models import SingleTaskGP
+from gpytorch.kernels import RBFKernel, MaternKernel, TanimotoKernel
+from gpytorch.likelihoods import GaussianLikelihood
+from botorch.fit import fit_gpytorch_model
+from botorch.utils.transforms import Standardize
 
 N_TOTAL_POINTS = 138_728
 
@@ -68,7 +73,7 @@ class MOBOQM9:
         else:
             raise NotImplementedError
     
-    def get_surrogate_model(self, X, y):
+    def get_surrogate_model(self, X, y, kernel_type='RBF'):
         """
         Gets the surrogate model for the MOBOQM9 model.
         
@@ -79,6 +84,26 @@ class MOBOQM9:
         returns:
             model: Surrogate model for the MOBOQM9 model.
         """
+        X_scaled = Standardize(X)
+        train_X = torch.tensor(X_scaled, dtype=torch.float32)
+        train_Y = torch.tensor(y, dtype=torch.float32)
+        likelihood = GaussianLikelihood()
+
+        if kernel_type == 'RBF':
+            kernel = RBFKernel()
+        elif kernel_type == 'Matern':
+            kernel = MaternKernel()
+        elif kernel_type == 'Tanimoto':
+            kernel = TanimotoKernel()
+        else:
+            raise ValueError("Unsupported kernel type. Supported types are 'RBF', 'Matern', and 'Tanimoto'.")
+
+        model = SingleTaskGP(train_X, train_Y, likelihood=likelihood, kernel=kernel)
+        mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
+        fit_gpytorch_model(mll)
+    
+        return model
+
         y_copy = y.copy()
         for idx, mask in enumerate(self.params.target_bools):
             if not mask:
