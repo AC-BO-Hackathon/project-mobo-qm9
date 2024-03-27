@@ -9,7 +9,6 @@ from src.utils import plot_results
 params = MOBOQM9Parameters(featurizer="CM",
                            kernel="RBF",
                            surrogate_model="GaussianProcess",
-                           acq_func="qEHVI",
                            targets=["gap", "mu"],
                            target_bools=[True, True],
                            num_total_points=100,
