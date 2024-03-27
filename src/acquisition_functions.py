@@ -39,7 +39,7 @@ def optimize_qEHVI(model, reference, y_train, x_test, n_candidates):
         q=n_candidates,
         unique=True
     )
-    return torch.tensor(candidates)
+    return candidates
 
 def optimize_qNEHVI(model, reference, x_train, x_test, n_candidates):
     """
@@ -69,4 +69,4 @@ def optimize_qNEHVI(model, reference, x_train, x_test, n_candidates):
         q=n_candidates,
         unique=True
     )
-    return torch.tensor(candidates)
+    return candidates

@@ -62,7 +62,7 @@ class MOBOQM9:
         self.dataframe = pd.DataFrame.from_dict(self.from_target_dict())
         self.acq_met = {"qEHVI": False, "qNEHVI": False, "random": False}
 
-    def form_target_dict(self):
+    def from_target_dict(self):
         """
         Forms the target dictionary for the MOBOQM9 model.
         
@@ -70,16 +70,17 @@ class MOBOQM9:
             target_dict: Target dictionary for the MOBOQM9 model.
         """
         target_dict = {}
+        target_dict["iteration_qEHVI"] = [None] * len(self.targets)
+        target_dict["iteration_qNEHVI"] = [None] * len(self.targets)
+        target_dict["iteration_random"] = [None] * len(self.targets)
         for itarg, target in enumerate(self.params.targets):
             target_dict[target] = self.targets[:, itarg]
-            target_dict["iteration_qEHVI"] = [None] * len(self.params.targets)
-            target_dict["iteration_qNEHVI"] = [None] * len(self.params.targets)
-            target_dict["iteration_random"] = [None] * len(self.params.targets)
-            for itrain, train_mask in enumerate(self.train_indices["qEHVI"]):
-                if train_mask:
-                    target_dict["iteration_qeHVI"] = 0
-                    target_dict["iteration_qNEHVI"] = 0
-                    target_dict["iteration_random"] = 0
+            
+        for itrain, train_mask in enumerate(self.train_indices["qEHVI"]):
+            if train_mask:
+                target_dict["iteration_qEHVI"][itrain] = 0
+                target_dict["iteration_qNEHVI"][itrain] = 0
+                target_dict["iteration_random"][itrain] = 0
         return target_dict
     
     def get_features_and_targets(self):
@@ -107,9 +108,9 @@ class MOBOQM9:
         returns:
             model: Surrogate model for the MOBOQM9 model.
         """
-        features = torch.tensor(self.features[self.train_indices["acq"]],
+        features = torch.tensor(self.features[self.train_indices[acq]],
                                 dtype=torch.double)
-        targets = torch.tensor(self.correct_sign(self.targets[self.train_indices["acq"]]),
+        targets = torch.tensor(self.correct_sign(self.targets[self.train_indices[acq]]),
                                 dtype=torch.double)
         var = torch.full_like(targets, 1e-6)
 
@@ -122,7 +123,7 @@ class MOBOQM9:
 
         models = [SingleTaskGP(features,
                                targets[:, i].unsqueeze(-1),
-                               noise=var[:, i].unsqueeze(-1),
+                               var[:, i].unsqueeze(-1),
                                input_transform=Normalize(d=features.shape[-1]),
                                outcome_transform=Standardize(m=1),
                                likelihood=gpytorch.likelihoods.GaussianLikelihood(),
@@ -154,11 +155,11 @@ class MOBOQM9:
         returns:
             candidates: Candidates for the MOBOQM9 model.
         """
-        y_train = self.correct_sign(self.targets[self.train_indices["acq"]])
+        y_train = self.correct_sign(self.targets[self.train_indices[acq]])
         y_train = torch.tensor(y_train, dtype=torch.double)
-        x_train = torch.tensor(self.features[self.train_indices["acq"]], dtype=torch.double)
-        x_test = torch.tensor(self.features[~self.train_indices["acq"]], dtype=torch.double)
-        reference = y_train.mean(0)[0]
+        x_train = torch.tensor(self.features[self.train_indices[acq]], dtype=torch.double)
+        x_test = torch.tensor(self.features[~self.train_indices[acq]], dtype=torch.double)
+        reference = y_train.min(0)[0]
         if acq == "qEHVI":
             return optimize_qEHVI(model=model,
                                   reference=reference,
@@ -186,11 +187,11 @@ class MOBOQM9:
                 model = self.get_surrogate_model(acq)
                 if acq == "random":
                     for _ in range(self.params.num_candidates):
-                        idx = np.random.choice(np.where(~self.train_indices)[0])
+                        idx = np.random.choice(np.where(~self.train_indices[acq])[0])
                         self.train_indices[acq][idx] = True
                         self.dataframe.at[idx, "iteration_random"] = iter + 1
                 else:
-                    candidates = self.optimize_acquisition_function(model)
+                    candidates = self.optimize_acquisition_function(model, acq)
                     self.update_train_indices(candidates, acq, iter)
                 self.stopping_criteria_met(acq)
                 
@@ -204,9 +205,9 @@ class MOBOQM9:
             train_indices: Train indices for the MOBOQM9 model.
         """
         # add latin hypercube sampling if time permits
-        temp_indices = np.random.randint(0, self.params.num_total_points,
+        temp_indices = np.random.randint(0, len(self.targets),
             self.params.num_seed_points)
-        mask = np.zeros(len(self.total_indices), dtype=bool)
+        mask = np.zeros(len(self.targets), dtype=bool)
         mask[temp_indices] = True
         return {"qEHVI": mask, "qNEHVI": mask, "random": mask}
     
