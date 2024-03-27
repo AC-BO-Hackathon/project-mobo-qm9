@@ -104,7 +104,8 @@ class MOBOQM9:
     
         return model
 
-        y_copy = y.copy()
+    def correct_sign(self,Y)
+        y_copy = Y.copy()
         for idx, mask in enumerate(self.params.target_bools):
             if not mask:
                 y_copy[:, idx] *= -1
