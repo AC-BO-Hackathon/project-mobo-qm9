@@ -5,8 +5,13 @@ import torch
 from botorch.utils.multi_objective.box_decompositions import DominatedPartitioning
 
 from .data.cm_featurizer import get_coulomb_matrix
-from .acquisition_functions import optimize_qEHVI, optimize_qNEHVI
 
+import torch
+from botorch.models import ModelListGP, FixedNoiseGP
+from gpytorch.kernels import RBFKernel, MaternKernel, TanimotoKernel
+from gpytorch.likelihoods import GaussianLikelihood
+from botorch.fit import fit_gpytorch_model
+from botorch.utils.transforms import Standardize
 
 N_TOTAL_POINTS = 138_728
 
@@ -71,7 +76,7 @@ class MOBOQM9:
         else:
             raise NotImplementedError
     
-    def get_surrogate_model(self, X, y):
+    def get_surrogate_model(self, X, y, kernel_type='RBF'):
         """
         Gets the surrogate model for the MOBOQM9 model.
         
@@ -82,7 +87,34 @@ class MOBOQM9:
         returns:
             model: Surrogate model for the MOBOQM9 model.
         """
-        y_copy = y.copy()
+        X_scaled = Standardize(X)
+        train_X = torch.tensor(X_scaled, dtype=torch.float32)
+        train_Y = torch.tensor(y, dtype=torch.float32)
+        likelihood = GaussianLikelihood()
+
+        input_transform = Standardize(m=train_X.shape[-2])
+        train_X_scaled = input_transform(train_X)
+        
+
+        if kernel_type == 'RBF':
+            kernel = RBFKernel()
+        elif kernel_type == 'Matern':
+            kernel = MaternKernel()
+        elif kernel_type == 'Tanimoto':
+            kernel = TanimotoKernel()
+        else:
+            raise ValueError("Unsupported kernel type. Supported types are 'RBF', 'Matern', and 'Tanimoto'.")
+
+        models = [FixedNoiseGP(train_X_scaled, train_Y, noise=torch.zeros_like(train_Y), likelihood=likelihood, kernel=kernel)]
+
+        model = ModelListGP(*models)
+        mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
+        fit_gpytorch_model(mll)
+
+        return model, input_transform
+
+    def correct_sign(self,Y)
+        y_copy = Y.copy()
         for idx, mask in enumerate(self.params.target_bools):
             if not mask:
                 y_copy[:, idx] *= -1
