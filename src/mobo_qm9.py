@@ -5,10 +5,10 @@ import torch
 from botorch.utils.multi_objective.box_decompositions import DominatedPartitioning
 from botorch.models import ModelListGP, SingleTaskGP
 import gpytorch
-from gpytorch.kernels import RBFKernel, MaternKernel, TanimotoKernel
+from gpytorch.kernels import RBFKernel, MaternKernel
 from botorch.fit import fit_gpytorch_mll
 from botorch.models.transforms.input import Normalize
-from botorch.models.transforms.output import Standardize
+from botorch.models.transforms.outcome import Standardize
 
 from .data.cm_featurizer import get_coulomb_matrix
 from .acquisition_functions import optimize_qEHVI, optimize_qNEHVI
@@ -33,7 +33,7 @@ class MOBOQM9Parameters(NamedTuple):
         n_iters: Number of iterations. Default is 20.
     """
     featurizer: Literal["ECFP", "CM", "ACSF"]
-    kernel: Literal["RBF", "Matern", "Tanimoto"]
+    kernel: Literal["RBF", "Matern"]
     surrogate_model: Literal["GaussianProcess", "RandomForest"]
     acq_func: Literal["qEHVI", "qNEHVI", "random"]
     targets: List[str]
@@ -93,8 +93,6 @@ class MOBOQM9:
             kernel = RBFKernel()
         elif self.params.kernel == 'Matern':
             kernel = MaternKernel()
-        elif self.params.kernel == 'Tanimoto':
-            kernel = TanimotoKernel()
         else:
             raise ValueError("Unsupported kernel type. Supported types are 'RBF', 'Matern', and 'Tanimoto'.")
 
@@ -226,7 +224,7 @@ class MOBOQM9:
             params: Parameters for the MOBOQM9 model.
         """
         assert self.params.featurizer in ["ECFP", "CM", "ACSF"], "Featurizer must be one of ECFP, CM, or ACSF."
-        assert self.params.kernel in ["RBF", "Matern", "Tanimoto"], "Kernel must be one of RBF, Matern, or Tanimoto."
+        assert self.params.kernel in ["RBF", "Matern", "Tanimoto"], "Kernel must be one of RBF, Matern."
         assert self.params.surrogate_model in ["GaussianProcess", "RandomForest"], "Surrogate model must be one of GaussianProcess, or RandomForest."
         assert self.params.acq_func in ["qEHVI", "qNEHVI", "random"], "Acquisition function must be one of qEHVI, or qNEHVI, or random."
         assert len(self.params.targets) == len(self.params.target_bools), "Number of targets must equal number of target booleans."
