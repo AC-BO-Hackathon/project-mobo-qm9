@@ -3,15 +3,15 @@ import numpy as np
 from loguru import logger
 import torch
 from botorch.utils.multi_objective.box_decompositions import DominatedPartitioning
+from botorch.models import ModelListGP, SingleTaskGP
+import gpytorch
+from gpytorch.kernels import RBFKernel, MaternKernel, TanimotoKernel
+from botorch.fit import fit_gpytorch_mll
+from botorch.models.transforms.input import Normalize
+from botorch.models.transforms.output import Standardize
 
 from .data.cm_featurizer import get_coulomb_matrix
-
-import torch
-from botorch.models import ModelListGP, FixedNoiseGP
-from gpytorch.kernels import RBFKernel, MaternKernel, TanimotoKernel
-from gpytorch.likelihoods import GaussianLikelihood
-from botorch.fit import fit_gpytorch_model
-from botorch.utils.transforms import Standardize
+from .acquisition_functions import optimize_qEHVI, optimize_qNEHVI
 
 N_TOTAL_POINTS = 138_728
 
@@ -76,50 +76,50 @@ class MOBOQM9:
         else:
             raise NotImplementedError
     
-    def get_surrogate_model(self, X, y, kernel_type='RBF'):
+    def get_surrogate_model(self):
         """
         Gets the surrogate model for the MOBOQM9 model.
-        
-        args:
-            X: Features for the MOBOQM9 model.
-            y: Targets for the MOBOQM9 model.
             
         returns:
             model: Surrogate model for the MOBOQM9 model.
         """
-        X_scaled = Standardize(X)
-        train_X = torch.tensor(X_scaled, dtype=torch.float32)
-        train_Y = torch.tensor(y, dtype=torch.float32)
-        likelihood = GaussianLikelihood()
+        features = torch.tensor(self.features[self.train_indices],
+                                dtype=torch.double)
+        targets = torch.tensor(self.correct_sign(self.targets[self.train_indices]),
+                                dtype=torch.double)
+        var = torch.full_like(targets, 1e-6)
 
-        input_transform = Standardize(m=train_X.shape[-2])
-        train_X_scaled = input_transform(train_X)
-        
-
-        if kernel_type == 'RBF':
+        if self.params.kernel == 'RBF':
             kernel = RBFKernel()
-        elif kernel_type == 'Matern':
+        elif self.params.kernel == 'Matern':
             kernel = MaternKernel()
-        elif kernel_type == 'Tanimoto':
+        elif self.params.kernel == 'Tanimoto':
             kernel = TanimotoKernel()
         else:
             raise ValueError("Unsupported kernel type. Supported types are 'RBF', 'Matern', and 'Tanimoto'.")
 
-        models = [FixedNoiseGP(train_X_scaled, train_Y, noise=torch.zeros_like(train_Y), likelihood=likelihood, kernel=kernel)]
+        models = [SingleTaskGP(features,
+                               targets[:, i].unsqueeze(-1),
+                               noise=var[:, i].unsqueeze(-1),
+                               input_transform=Normalize(d=features.shape[-1]),
+                               outcome_transform=Standardize(m=1),
+                               likelihood=gpytorch.likelihoods.GaussianLikelihood(),
+                               mean_module=gpytorch.means.ConstantMean(),
+                               covar_module=kernel) 
+                  for i in range(targets.shape[1])]
 
         model = ModelListGP(*models)
-        mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
-        fit_gpytorch_model(mll)
+        mll = gpytorch.mlls.SumMarginalLogLikelihood(model.likelihood, model)
+        fit_gpytorch_mll(mll)
 
-        return model, input_transform
+        return model
 
-    def correct_sign(self,Y)
+    def correct_sign(self, Y):
         y_copy = Y.copy()
         for idx, mask in enumerate(self.params.target_bools):
             if not mask:
                 y_copy[:, idx] *= -1
-        # build the model
-        pass
+        return y_copy
     
     def optimize_acquisition_function(self, model):
         """
@@ -131,13 +131,10 @@ class MOBOQM9:
         returns:
             candidates: Candidates for the MOBOQM9 model.
         """
-        y_train = self.targets[self.train_indices]
-        for idx, mask in enumerate(self.params.target_bools):
-            if not mask:
-                y_train[:, idx] *= -1
-        y_train = torch.tensor(y_train)
-        x_train = torch.tensor(self.features[self.train_indices])
-        x_test = torch.tensor(self.features[~self.train_indices])
+        y_train = self.correct_sign(self.targets[self.train_indices])
+        y_train = torch.tensor(y_train, dtype=torch.double)
+        x_train = torch.tensor(self.features[self.train_indices], dtype=torch.double)
+        x_test = torch.tensor(self.features[~self.train_indices], dtype=torch.double)
         reference = y_train.mean(0)[0]
         if self.params.acq_func == "qEHVI":
             return optimize_qEHVI(model=model,
@@ -159,9 +156,8 @@ class MOBOQM9:
         Runs the MOBOQM9 optimization.
         """
         for iter in range(self.params.n_iters):
-            X = self.features[self.train_indices]
-            y = self.targets[self.train_indices]
-            model = self.get_surrogate_model(X, y)
+            logger.info(f"MOBOQM9 iteration {iter + 1} of {self.params.n_iters}.")
+            model = self.get_surrogate_model()
             if self.params.acq_func == "random":
                 for _ in range(self.params.num_candidates):
                     idx = np.random.choice(np.where(~self.train_indices)[0])
