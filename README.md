@@ -1,5 +1,7 @@
 [![Open in Codespaces](https://classroom.github.com/assets/launch-codespace-7f7980b617ed060a017424585567c406b6ee15c891e84e1186181d67ecf80aa0.svg)](https://classroom.github.com/open-in-codespaces?assignment_repo_id=14492361)
-# Investigation of Multi-Objective Bayesian Optimization of QM9 Dataset
+# Project 18: Investigation of Multi-Objective Bayesian Optimization of QM9 Dataset
+
+### Osman Mamun, Aditya Sundar, and Akhil S. Nair
 
 This project will investigate the application of multi-objective Bayesian optimization (specifically EHVI- and parEGO-based methods) to benchmark several multi-objective optimization tasks with QM9 dataset. The objective is to develop specific guidelines about the choice of surrogate and acquisition functions in the context of Multi-Objective Bayesian Optimization for molecular property optimization.
 
