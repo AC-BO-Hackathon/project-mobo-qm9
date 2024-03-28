@@ -5,13 +5,15 @@ import torch
 from botorch.utils.multi_objective.box_decompositions import DominatedPartitioning
 from botorch.models import ModelListGP, SingleTaskGP
 import gpytorch
-from gpytorch.kernels import RBFKernel, MaternKernel
+from gpytorch.kernels import RBFKernel
 from botorch.fit import fit_gpytorch_mll
 from botorch.models.transforms.input import Normalize
 from botorch.models.transforms.outcome import Standardize
+from gpytorch.mlls.sum_marginal_log_likelihood import SumMarginalLogLikelihood
 import pandas as pd
 
 from .data.cm_featurizer import get_coulomb_matrix
+from.data.soap_featurizer import get_soap
 from .acquisition_functions import optimize_qEHVI, optimize_qNEHVI
 
 N_TOTAL_POINTS = 138_728
@@ -32,7 +34,7 @@ class MOBOQM9Parameters(NamedTuple):
         num_seed_points: Number of seed points to use. Default is 100.
         n_iters: Number of iterations. Default is 20.
     """
-    featurizer: Literal["ECFP", "CM", "ACSF"]
+    featurizer: Literal["ECFP", "CM", "SOAP"]
     kernel: Literal["RBF", "Matern"]
     surrogate_model: Literal["GaussianProcess", "RandomForest"]
     targets: List[str]
@@ -95,6 +97,9 @@ class MOBOQM9:
         if self.params.featurizer == "CM":
             return get_coulomb_matrix(self.total_indices,
                 self.params.targets)
+        elif self.params.featurizer == "SOAP":
+            return get_soap(self.total_indices,
+                self.params.targets)
         else:
             raise NotImplementedError
     
@@ -117,7 +122,10 @@ class MOBOQM9:
         if self.params.kernel == 'RBF':
             kernel = RBFKernel()
         elif self.params.kernel == 'Matern':
-            kernel = MaternKernel()
+            kernel = gpytorch.kernels.ScaleKernel(
+                gpytorch.kernels.MaternKernel()
+                ) + gpytorch.kernels.ScaleKernel(
+                gpytorch.kernels.LinearKernel())
         else:
             raise ValueError("Unsupported kernel type. Supported types are 'RBF', and 'Matern'.")
 
@@ -132,7 +140,7 @@ class MOBOQM9:
                   for i in range(targets.shape[1])]
 
         model = ModelListGP(*models)
-        mll = gpytorch.mlls.SumMarginalLogLikelihood(model.likelihood, model)
+        mll = SumMarginalLogLikelihood(model.likelihood, model)
         fit_gpytorch_mll(mll)
 
         return model
@@ -256,7 +264,7 @@ class MOBOQM9:
         args:
             params: Parameters for the MOBOQM9 model.
         """
-        assert self.params.featurizer in ["ECFP", "CM", "ACSF"], "Featurizer must be one of ECFP, CM, or ACSF."
+        assert self.params.featurizer in ["ECFP", "CM", "SOAP"], "Featurizer must be one of ECFP, CM, or SOAP."
         assert self.params.kernel in ["RBF", "Matern", "Tanimoto"], "Kernel must be one of RBF, Matern."
         assert self.params.surrogate_model in ["GaussianProcess", "RandomForest"], "Surrogate model must be one of GaussianProcess, or RandomForest."
         assert len(self.params.targets) == len(self.params.target_bools), "Number of targets must equal number of target booleans."

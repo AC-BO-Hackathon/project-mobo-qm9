@@ -21,11 +21,11 @@ def plot_results(df, target_bool):
     ax = ax.flatten()
     targets = [col for col in df.columns if not col.startswith("iteration")]
     global_values = torch.tensor(df[targets].values)
-    global_pareto_idx = is_non_dominated(global_values)
-    global_pareto_front = global_values[global_pareto_idx]
     for mask in target_bool:
         if not mask:
             global_values[:, mask] *= -1
+    global_pareto_idx = is_non_dominated(global_values)
+    global_pareto_front = global_values[global_pareto_idx]
     ref_point = global_values.min(0)[0]
     hv = DominatedPartitioning(ref_point=ref_point, Y=global_values)
     global_hv = hv.compute_hypervolume().item()
@@ -54,6 +54,9 @@ def plot_results(df, target_bool):
     max_iterations = int(df['iteration_qEHVI'].max())
     current_data = df[df['iteration_qEHVI'] <= max_iterations]
     qEHVI_values = torch.tensor(current_data[targets].values)
+    for mask in target_bool:
+        if not mask:
+            qEHVI_values[:, mask] *= -1
     qEHVI_pareto_idx = is_non_dominated(qEHVI_values)
     qEHVI_pareto_front = qEHVI_values[qEHVI_pareto_idx]
     ax[1].scatter(qEHVI_pareto_front[:, 0], qEHVI_pareto_front[:, 1],
@@ -70,6 +73,9 @@ def plot_results(df, target_bool):
     max_iterations = int(df['iteration_qNEHVI'].max())
     current_data = df[df['iteration_qNEHVI'] <= max_iterations]
     qNEHVI_values = torch.tensor(current_data[targets].values)
+    for mask in target_bool:
+        if not mask:
+            qNEHVI_values[:, mask] *= -1
     qNEHVI_pareto_idx = is_non_dominated(qNEHVI_values)
     qNEHVI_pareto_front = qNEHVI_values[qNEHVI_pareto_idx]
     ax[2].scatter(qNEHVI_pareto_front[:, 0], qNEHVI_pareto_front[:, 1],
@@ -86,6 +92,9 @@ def plot_results(df, target_bool):
     max_iterations = int(df['iteration_random'].max())
     current_data = df[df['iteration_random'] <= max_iterations]
     random_values = torch.tensor(current_data[targets].values)
+    for mask in target_bool:
+        if not mask:
+            random_values[:, mask] *= -1
     random_pareto_idx = is_non_dominated(random_values)
     random_pareto_front = random_values[random_pareto_idx]
     ax[3].scatter(random_pareto_front[:, 0], random_pareto_front[:, 1],

@@ -39,6 +39,10 @@ def get_soap(indices, targets):
         r_cut = 3.0,
         n_max = 4,
         l_max = 3,
+        periodic=False,
+        sparse=False,
+        average="inner",
+        rbf="gto",
     )
     
     atoms_list, computed_targets = [], []
