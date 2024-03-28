@@ -23,3 +23,11 @@ This problem aims to find materials with a high dielectric constant in conjuncti
 This problem is trying to find the molecules with a high dielectric constant with a low bandgap (high electrical conductivity).
 
 ![Maximization of mu with minimizing gap](experiments/mu_gap/mu_gap_results.png)
+
+# Maximizing mu and minimizing Gibbs Free Energy
+
+This problem is trying to find the most stable (low G) molecules with a high dielectric constant.
+
+![Maximization of mu with minimizing G](experiments/mu_G/mu_G_results.png)
+
+

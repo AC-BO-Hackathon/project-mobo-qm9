@@ -6,12 +6,13 @@ from botorch.utils.multi_objective.pareto import is_non_dominated
 
 
 # Create
-def plot_results(df, target_bool):
+def plot_results(df, targets, target_bool):
     """
     Plots the results for the MOBOQM9 model.
     
     args:
         df: Results for the MOBOQM9 model.
+        targets: Targets for the MOBOQM9 model.
         target_bool: Targets for the MOBOQM9 model.
     
     returns:
@@ -19,13 +20,15 @@ def plot_results(df, target_bool):
     """
     fig, ax = plt.subplots(2, 2, figsize=(20,10))
     ax = ax.flatten()
-    targets = [col for col in df.columns if not col.startswith("iteration")]
     global_values = torch.tensor(df[targets].values)
     for mask in target_bool:
         if not mask:
             global_values[:, mask] *= -1
     global_pareto_idx = is_non_dominated(global_values)
     global_pareto_front = global_values[global_pareto_idx]
+    for mask in target_bool:
+        if not mask:
+            global_pareto_front[:, mask] *= -1
     ref_point = global_values.min(0)[0]
     hv = DominatedPartitioning(ref_point=ref_point, Y=global_values)
     global_hv = hv.compute_hypervolume().item()
@@ -59,6 +62,9 @@ def plot_results(df, target_bool):
             qEHVI_values[:, mask] *= -1
     qEHVI_pareto_idx = is_non_dominated(qEHVI_values)
     qEHVI_pareto_front = qEHVI_values[qEHVI_pareto_idx]
+    for mask in target_bool:
+        if not mask:
+            qEHVI_pareto_front[:, mask] *= -1
     ax[1].scatter(qEHVI_pareto_front[:, 0], qEHVI_pareto_front[:, 1],
         color='red', label="qEHVI Pareto Front", marker="*", s=100)
     ax[1].scatter(df[targets[0]], df[targets[1]], alpha=0.3)
@@ -78,6 +84,9 @@ def plot_results(df, target_bool):
             qNEHVI_values[:, mask] *= -1
     qNEHVI_pareto_idx = is_non_dominated(qNEHVI_values)
     qNEHVI_pareto_front = qNEHVI_values[qNEHVI_pareto_idx]
+    for mask in target_bool:
+        if not mask:
+            qNEHVI_pareto_front[:, mask] *= -1
     ax[2].scatter(qNEHVI_pareto_front[:, 0], qNEHVI_pareto_front[:, 1],
         color='red', label="qNEHVI Pareto Front", marker="*", s=100)
     ax[2].scatter(df[targets[0]], df[targets[1]], alpha=0.3)
@@ -97,6 +106,9 @@ def plot_results(df, target_bool):
             random_values[:, mask] *= -1
     random_pareto_idx = is_non_dominated(random_values)
     random_pareto_front = random_values[random_pareto_idx]
+    for mask in target_bool:
+        if not mask:
+            random_pareto_front[:, mask] *= -1
     ax[3].scatter(random_pareto_front[:, 0], random_pareto_front[:, 1],
         color='red', label="Random Pareto Front", marker="*", s=100)
     ax[3].scatter(df[targets[0]], df[targets[1]], alpha=0.3)

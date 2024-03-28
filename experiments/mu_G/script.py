@@ -11,7 +11,7 @@ from src.utils import plot_results
 params = MOBOQM9Parameters(featurizer="SOAP",
                            kernel="Matern",
                            surrogate_model="GaussianProcess",
-                           targets=["mu", "gap"],
+                           targets=["mu", "G_free_energy"],
                            target_bools=[True, False],
                            num_total_points=1000,
                            num_seed_points=50,
@@ -20,9 +20,9 @@ params = MOBOQM9Parameters(featurizer="SOAP",
 
 moboqm9 = MOBOQM9(params)
 moboqm9.run_optimization()
-fig = plot_results(moboqm9.dataframe, ["mu", "gap"], [True, False])
+fig = plot_results(moboqm9.dataframe, ["mu", "G_free_energy"], [True, False])
 fig.tight_layout()
-plt.savefig("mu_gap_results.png")
+plt.savefig("mu_G_results.png")
 plt.show()
-moboqm9.dataframe.to_csv("mu_gap_results.csv")
+moboqm9.dataframe.to_csv("mu_G_results.csv")
 
